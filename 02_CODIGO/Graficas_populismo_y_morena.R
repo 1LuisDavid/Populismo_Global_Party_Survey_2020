@@ -14,7 +14,7 @@ library(ggthemes)
 
 #### Datos  ------
 
-pop <- read_csv("DATOS/Global Party Survey by Party SPSS V2_1_Apr_2020-2.csv")
+pop <- read_csv("01_DATOS/Global Party Survey by Party SPSS V2_1_Apr_2020-2.csv")
 pop <- clean_names(pop)
 pop <- pop %>% select(2, 4, 8, 12, 13, 14, 16, 20:27, 29:32, 36, 37, 38, 
                       39:44, 58, 60, 108:111, 116, 117, 118, 127, 107:110)
