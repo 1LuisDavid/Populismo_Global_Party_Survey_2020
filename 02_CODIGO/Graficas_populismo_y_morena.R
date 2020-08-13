@@ -9,6 +9,8 @@ library(readr)
 library(janitor)
 library(tidyverse)
 library(ggthemes)  
+library(patchwork)
+library(ggrepel)
 
 
 
@@ -53,246 +55,6 @@ bd <-
                  Tipo_de_régimen_Vdem = v_dem_regime)
 
 
-
-######## Gráfica sobre el Número de partidos populistas por país -------
-#  Promedio de partidos populistas en países que tienen al menos un partido populista no marginal
-bd %>%
-  filter(Populismo >= 3 &
-           Categorías_asientos_en_cámara >= 2) %>%
-  group_by(País, Tipo_de_régimen_Vdem) %>%
-  count(País) %>% arrange(-n) %>% ungroup() %>% count(n) %>% 
-  mutate(total_partidos = n*nn) %>% 
-  summarise(promedio_partidos_por_pais = sum(total_partidos)/sum(nn))
-
-
-
-# Primero se preparan los datos
-bd %>%
-  # Este es el filtro para separar a los partidos populistas con más del 3% de asientos en sus congresos
-  filter(Populismo >= 3 & 
-           Categorías_asientos_en_cámara >= 2) %>% 
-  group_by(País) %>% count(País) %>% arrange(-n) %>% ungroup() %>%
-  count(n) %>%
-  # Se grafican los datos
-  ggplot(aes(x = n, y = nn))+
-  geom_col(fill = "#0B465F")+
-  coord_flip()+
-  
-  theme_fivethirtyeight()+
-  
-  scale_x_continuous(limits = c(0, 9), breaks = seq(1, 8, 1))+
-  
-  geom_text(aes( y = nn, label = nn),
-            position = position_stack(), vjust = .5, hjust = 1.5,
-            col = "grey80", size = 6)+
-  
-  
-  labs(x = "Número de partidos populistas por país", y = "Número de países con al menos un partido populista",
-       title="Número de partidos populistas por país",
-       subtitle = "Total de países con al menos un partido populista: 87\nPromedio de partidos populistas por cada país que tiene al menos un partido populista: 2.72",
-       caption = "Elaborado por @1LuisDavid con datos de Global Party Survey 2020")+
-  
-  theme(plot.title = element_text(face = "bold", size = 18),
-        plot.subtitle = element_text(color = "black", size = 14),
-        plot.caption = element_text(face = "italic", hjust = 1, size = 11),
-        axis.text.x = element_text(angle = 0, size = 14),
-        axis.text.y = element_text(angle = 0, size = 16),
-        axis.ticks = element_blank(),
-        axis.title = element_text(size=14)) +
-  
-  ggsave("G1 número de partidos populistas por país.png", width = 14, height = 10, dpi = 200)
-
-
-####### Gráfica sobre número de países con al menos un partido populista    ------
-
-#primero obtener el número de países totales por tipo de régimen
-y <-
-  bd %>%
-  select(País, Tipo_de_régimen_Vdem) %>% 
-  group_by(País) %>% 
-  summarise(Tipo_de_régimen_Vdem = max(Tipo_de_régimen_Vdem)) %>% ungroup() %>% 
-  count(Tipo_de_régimen_Vdem)
-
-
-#Después, hay que obtener el número de países con partidos populistas por régimen
-x <-
-  bd %>% 
-  filter(Populismo >= 3 &
-           Categorías_asientos_en_cámara >= 2) %>% 
-  group_by(País, Tipo_de_régimen_Vdem) %>% 
-  count(País) %>% arrange(-n) %>% ungroup() %>% 
-  count(Tipo_de_régimen_Vdem)
-
-
-#Unir los dataframes
-Países_con_pop <- merge(x, y, by = "Tipo_de_régimen_Vdem", sort = F, all = T)
-
-
-#Renombrar variables y obtener porcentajes
-Países_con_pop <- 
-  Países_con_pop %>% rename(Países_c_pp = n.x,
-                            Total_países = n.y) %>% 
-  mutate(Países_sin_pp = (Total_países - Países_c_pp),
-         porcentaje_c_pp = (Países_c_pp / Total_países),
-         porcentaje_s_pp = (Países_sin_pp / Total_países)) %>% na.omit()
-
-
-#Graficar
-Países_con_pop %>% select(1,2,4) %>% 
-  #Se suma un uno a la variable Tipo de régimen para que al momento de graficar se comience en el valor 1 y no en el 0
-  mutate(Tipo_de_régimen_Vdem = (Tipo_de_régimen_Vdem+1)) %>% 
-  #Se pivotearon los datos, desde la variable número dos hasta la tres
-  pivot_longer(2:3) %>% 
-  
-  ggplot(aes(x = Tipo_de_régimen_Vdem, y = value, fill = name))+
-  geom_col()+
-  coord_flip()+
-  
-  theme_fivethirtyeight()+
-  
-  geom_text(aes( y = value, label = value),
-            position = position_stack(), vjust = .5, hjust = 1.1,
-            col = "grey60", size = 6)+
-  
-  labs(x = " ", y = "Número de países",
-       title="Número de países con al menos un partido populista por tipo de régimen",
-       subtitle = "Número de países con al menos un partido populista: 83\nNúmero de países sin un solo partido populista: 74",
-       caption = "Elaborado por @1LuisDavid con datos de Global Party Survey 2020",
-       fill = " ")+
-  
-  scale_y_continuous(limits = c(0, 60), breaks = seq(0, 60, 10))+
-  
-  #Aquí se modificaron los nombres de las variables discretas del eje x, a cada factor se le asignó una etiqueta
-  scale_x_discrete(limits=c(1,2,3,4),
-                   labels=c("Autocracia\nabsoluta", "Autocracia\nelectoral",
-                            "Democracia\nelectoral", "Democracia\nliberal"))+
-  
-  
-  #Se buscaron y se asignaron los colores de la paleta de manera manual al igual que en el resto de las gráficas
-  scale_fill_manual(values = c("#0B465F", "#50F2B7"),
-                    labels = c("Países con al menos\nun partido populista", "Países sin\npartido populista"))+
-  
-  theme(plot.title = element_text(face = "bold", size = 18),
-        plot.subtitle = element_text(color = "black", size = 14),
-        plot.caption = element_text(face = "italic", hjust = 1, size = 11),
-        axis.text.x = element_text(vjust = 0.3, hjust = .5, size = 14),
-        axis.text.y = element_text(size = 16),
-        axis.ticks = element_blank(),
-        legend.background = element_rect(fill = "grey75"),
-        legend.key = element_rect(fill = "grey75", color = NA),
-        legend.text = element_text(size = 14),
-        axis.title = element_text(size=14))+
-  
-  ggsave("G2 número de países con al menos un partido populista.png", width = 14, height = 10, dpi = 200)
-
-
-#Aquí se identifican los 3 países con partidos populistas que no pudieron ser clasificados por tipo de régimen
-bd %>% 
-  filter(Populismo >= 3 &
-           Categorías_asientos_en_cámara >= 2) %>% 
-  select(País, Tipo_de_régimen_Vdem) %>% 
-  group_by(País) %>% 
-  summarise(Tipo_de_régimen_Vdem = max(Tipo_de_régimen_Vdem)) %>% ungroup() %>% 
-  arrange(Tipo_de_régimen_Vdem) %>% tail()
-
-
-#######   Gráfica sobre el % de países con al menos un partido populista    ------
-
-
-Países_con_pop %>% select(1,2,4) %>% 
-  mutate(Tipo_de_régimen_Vdem = (Tipo_de_régimen_Vdem+1)) %>%
-  mutate(pct_c_pp = (Países_c_pp/(Países_c_pp+Países_sin_pp)),
-         pct_sin_pp = (Países_sin_pp/(Países_c_pp+Países_sin_pp))) %>% 
-  select(1,4,5) %>% 
-  pivot_longer(2:3) %>% 
-  
-  ggplot(aes(x = Tipo_de_régimen_Vdem, y = value, fill = name))+
-  geom_col()+
-  coord_flip()+
-  
-  theme_fivethirtyeight()+
-  
-  geom_text(aes( y = value, label = round(value, digits = 2)),
-            position = position_stack(), vjust = .5, hjust = 1.1,
-            col = "grey60", size = 6)+
-  
-  labs(x = " ", y = " ",
-       title="Porcentaje de países con al menos un partido populista",
-       subtitle = "Por tipo de régimen",
-       caption = "Elaborado por @1LuisDavid con datos de Global Party Survey 2020",
-       fill = " ")+
-  
-  scale_x_discrete(limits=c(1,2,3,4),
-                   labels=c("Autocracia\nabsoluta", "Autocracia\nelectoral",
-                            "Democracia\nelectoral", "Democracia\nliberal"))+
-  
-  
-  
-  scale_fill_manual(values = c("#0B465F", "#50F2B7"),
-                    labels = c("Porcentaje de\npaíses con al menos\nun partido populista", 
-                               "Porcentaje de\npaíses sin\npartido populista"))+
-  
-  theme(plot.title = element_text(face = "bold", size = 18),
-        plot.subtitle = element_text(color = "black", size = 14),
-        plot.caption = element_text(face = "italic", hjust = 1, size = 11),
-        axis.text.x = element_text(vjust = 0.3, hjust = .5, size = 14),
-        axis.text.y = element_text(size = 16),
-        axis.ticks = element_blank(),
-        legend.background = element_rect(fill = "grey75"),
-        legend.key = element_rect(fill = "grey75", color = NA),
-        legend.text = element_text(size = 14),
-        axis.title = element_text(size=12))+
-  
-  ggsave("G3 Porcentaje de países con al menos un partido populista.png", width = 14, height = 10, dpi = 200)
-
-
-#######   Gráfica sobre el número de partidos pluralistas y populistas    ------
-
-
-bd %>% mutate(con_partido_populista = ifelse(Populismo >= 3, "Con populismo", "Sin populismo")) %>% 
-  #Se filtran todos los partidos no marginales, con más del 3% de aisentos en sus respectivas cámaras legislativas
-  filter(Categorías_asientos_en_cámara >= 2) %>%
-  group_by( Tipo_de_régimen_Vdem, con_partido_populista) %>% 
-  count() %>% na.omit() %>% ungroup() %>% 
-  mutate(Tipo_de_régimen_Vdem = (Tipo_de_régimen_Vdem+1)) %>% 
-  
-  ggplot(aes(x = Tipo_de_régimen_Vdem, y = n, fill = con_partido_populista))+
-  geom_col()+
-  coord_flip()+
-  
-  labs(x = " ", y = "Número de partidos",
-       title="Número de partidos no marginales tanto pluralistas como populistas por tipo de régimen",
-       subtitle = "Número de partidos pluralistas: 192\nNúmero de partidos populistas: 233",
-       caption = "Elaborado por @1LuisDavid con datos de Global Party Survey 2020",
-       fill = " ")+
-  
-  theme_fivethirtyeight()+
-  
-  geom_text(aes( y = n, label = n),
-            position = position_stack(), vjust = .5, hjust = 1.1,
-            col = "grey60", size = 6)+
-  
-  scale_y_continuous(limits = c(0, 180), breaks = seq(0, 180, 30))+
-  
-  scale_x_discrete(limits=c(1,2,3,4),
-                   labels=c("Autocracia\nabsoluta", "Autocracia\nelectoral",
-                            "Democracia\nelectoral", "Democracia\nliberal"))+
-  
-  scale_fill_manual(values = c("#0B465F", "#50F2B7"),
-                    labels = c("Partidos\npopulistas", "Partidos\npluralistas"))+
-  
-  theme(plot.title = element_text(face = "bold", size = 18),
-        plot.subtitle = element_text(color = "black", size = 14),
-        plot.caption = element_text(face = "italic", hjust = 1, size = 11),
-        axis.text.x = element_text(vjust = 0.3, hjust = .5, size = 14),
-        axis.text.y = element_text(size = 16),
-        axis.ticks = element_blank(),
-        legend.background = element_rect(fill = "grey75"),
-        legend.key = element_rect(fill = "grey75", color = NA),
-        legend.text = element_text(size = 14),
-        axis.title = element_text(size=12))+
-  
-  ggsave("G4 Número de partidos tanto pluralistas como populistas.png", width = 14, height = 10, dpi = 200)
 
 
 ####### Gráfica de características retóricas de MORENA   -----
@@ -469,7 +231,6 @@ partidos_relev_completo_2 <-
 
 na.omit(partidos_relev_completo_2) %>% pivot_longer(3:17) %>% 
   
-  
   ggplot(aes(x = name, y=value)) +
   
   geom_line(aes(group = Partido, color = pop_o_plur))+
@@ -636,6 +397,252 @@ na.omit(partidos_relev_completo_2) %>% pivot_longer(3:17) %>%
 
 
 
+#####  Análisis de clusters   ------
+
+cluster <- na.omit(partidos_relevantes)
+
+cluster <- cluster %>% filter(Retórica_populista >= 5)
+
+cluster <- cluster %>% select(Valores_democrático_liberales, 
+                              Controles_y_balances_al_Ejecutivo, 
+                              Retórica_hacia_políticos, Voluntad_del_pueblo)
+
+
+
+
+cluster_scale <- scale(cluster) # escalar 
+
+set.seed(180) #establecer valor aleatorio para replicabilidad
+
+optimo <- kmeans(cluster_scale, centers = 1)$betweenss
+
+for(i in 2:10) optimo[i] <- kmeans(cluster_scale, centers = i)$betweenss
+
+plot(1:10, optimo, type = "b", xlab = "número de clusters", ylab = "suma de cuadrados inter grupos")
+
+part_pop_clusters <- kmeans(cluster_scale, centers = 3) # Realizamos clustering
+names(part_pop_clusters) # contenido del objeto
+
+head(part_pop_clusters$cluster) # asignación observaciones a clusters
+part_pop_clusters$totss # inercia total
+part_pop_clusters$betweenss # inercia ínter grupos
+part_pop_clusters$withinss # inercia intra grupos
+part_pop_clusters$tot.withinss # inercia intra grupos (total)
+
+plot(cluster$Voluntad_del_pueblo, cluster$Controles_y_balances_al_Ejecutivo, 
+     col = part_pop_clusters$cluster ,xlab = "Voluntad del pueblo", ylab = "Balances al Ejecutivo" )
+
+aggregate(cluster ,by = list(part_pop_clusters$cluster), mean)
+
+cluster_optimo <-
+na.omit(partidos_relevantes) %>% filter(Retórica_populista >= 5)
+cluster_optimo$num_cluster <- as.vector(part_pop_clusters$cluster)
+
+
+cluster_optimo %>% count(num_cluster)
+
+
+# Gráficas de cluster
+ 
+
+c1 <-
+  ggplot(cluster_optimo %>% filter(num_cluster == 1))+
+  
+  geom_point( aes(x = Voluntad_del_pueblo, y = Controles_y_balances_al_Ejecutivo, 
+                  color = Valores_democrático_liberales, 
+                  size = Retórica_hacia_políticos), 
+              alpha = .5)+
+  
+  geom_text_repel(data = cluster_optimo %>% filter(Partido == "Labour Party" |
+                                                     Partido == "The Left" |
+                                                     Partido == "Conservative Party"),
+                  aes(x = Voluntad_del_pueblo, y = Controles_y_balances_al_Ejecutivo, 
+                                     label = Partido), 
+                  # color = "#d9060c",
+                  nudge_y = 3.5)+
+  
+  
+  
+  geom_label( fill = "#F0F0F0",
+              x = 0.5, y = 6.5, 
+              label="Valores promedio del Cluster 1:
+                                \n•Valores de la democracia liberal: 3.4\n•Retórica usada hacia los políticos: 5.0\n•Voluntad del pueblo: 3.9\n•A favor o en contra de los controles y\nbalances hacia el poder ejecutivo: 3.7",
+              size = 3.55, color="black")+
+  
+  
+  scale_color_gradient(low = "#0B465F", high = "#50F2B7", limits = c(0, 10))+
+  scale_size(guide = F)+
+  # scale_radius(limits = c(0, 10), range = c(0, 10))+
+  scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))+
+  scale_x_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))+
+  
+  theme_void()+
+  
+  
+  theme(plot.background = element_rect(fill = "#F0F0F0", color = F),
+        plot.title = element_text(face = "bold", size = 18),
+        plot.subtitle = element_text(color = "black", size = 14),
+        plot.caption = element_text(face = "italic", hjust = 1, size = 11),
+        axis.title.x = element_text(inherit.blank = F),
+        axis.title.y = element_text(inherit.blank = F, angle = 90),
+        axis.text.x = element_text(angle = 0, size = 12, vjust = 0, hjust = .5),
+        axis.text.y = element_text(size = 12),
+        axis.ticks = element_blank(),
+        legend.background = element_rect(fill = "#F0F0F0", color = F),
+        legend.key = element_rect(fill = "grey75", color = NA),
+        legend.text = element_text(size = 12, hjust = 1),
+        legend.position = c(.95, .05),
+        legend.justification = c("right", "bottom"),
+        legend.box.just = "right")+
+  
+  labs(x = "Voluntad del pueblo", y = "A favor o en contra\nde los controles y\nbalances hacia el\npoder ejecutivo",
+       title="Cluster 1: Partidos populistas que favorecen las normas y principios de la democracia liberal",
+       subtitle = "Tienen una retórica que favorece los controles y balances hacia el poder ejecutivo ",
+       color = "Valores de la\ndemocracia liberal",
+       size = " ")
+
+
+
+c2 <-
+  ggplot(cluster_optimo %>% filter(num_cluster == 2))+
+  
+  geom_point( aes(x = Voluntad_del_pueblo, y = Controles_y_balances_al_Ejecutivo, 
+                  color = Valores_democrático_liberales, 
+                  size = Retórica_hacia_políticos), 
+              alpha = .5)+
+  geom_point(data = morena, aes(x = Voluntad_del_pueblo, y = Controles_y_balances_al_Ejecutivo, 
+                                color = Valores_democrático_liberales,
+                                size = Retórica_hacia_políticos), 
+             shape = 21, colour = "#d9060c", size = 8, stroke = 1)+
+    
+  geom_text_repel(data = morena, aes(x = Voluntad_del_pueblo, y = Controles_y_balances_al_Ejecutivo, 
+                                     label = Partido), 
+                  color = "#d9060c",
+                  nudge_y = 1)+
+  
+  geom_text_repel(data = cluster_optimo %>% filter(Partido == "Republican Party" |
+                                                     Partido == "Communist Party of Greece" |
+                                                     Partido == "Vox" |
+                                                     Partido == "United Socialist Party of Venezuela/Great Patriotic Pole"),
+                  aes(x = Voluntad_del_pueblo, y = Controles_y_balances_al_Ejecutivo, 
+                      label = Partido), 
+                  # color = "#d9060c",
+                  nudge_x = 1.5)+
+  
+  
+  
+  geom_label( fill = "#F0F0F0",
+              x= 7.5, y=5, 
+              label="Valores promedio del Cluster 2:
+                                \n•Valores de la democracia liberal: 7.3\n•Retórica usada hacia los políticos: 7.9\n•Voluntad del pueblo: 2.7\n•A favor o en contra de los controles y\nbalances hacia el poder ejecutivo: 5.7",
+              size=4, color="black")+
+  
+  
+  
+  scale_color_gradient(low = "#0B465F", high = "#50F2B7", limits = c(0, 10),guide = F)+
+  # scale_size(guide = F)+
+  scale_radius(limits = c(0, 10), range = c(0, 10))+
+  scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))+
+  scale_x_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))+
+  
+  theme_void()+
+  
+  
+  theme(plot.background = element_rect(fill = "#F0F0F0", color = F),
+        plot.title = element_text(face = "bold", size = 18),
+        plot.subtitle = element_text(color = "black", size = 14),
+        plot.caption = element_text(face = "italic", hjust = 1, size = 11),
+        axis.text.x = element_text(angle = 0, size = 12, vjust = 0, hjust = .5),
+        axis.text.y = element_text(size = 12),
+        axis.title.x = element_text(inherit.blank = F),
+        axis.title.y = element_text(inherit.blank = F, angle = 90),
+        axis.ticks = element_blank(),
+        legend.background = element_rect(fill = "#F0F0F0", color = F),
+        legend.key = element_rect(fill = "grey75", color = NA),
+        legend.text = element_text(size = 12, hjust = 1),
+        legend.position = c(.95, .05),
+        legend.justification = c("right", "bottom"),
+        legend.box.just = "right")+
+  
+  labs(x = "Voluntad del pueblo", y = "A favor o en contra\nde los controles y\nbalances hacia el\npoder ejecutivo",
+       title="Cluster 2: Partidos populistas contra los grupos políticos y contra la democracia liberal",
+       subtitle = "Tienen una retórica que expresa que los políticos se deben limitar a seguir la voluntad del pueblo",
+       color = "Valores de la democracia liberal",
+       size = "Retórica hacia\nlos políticos")
+
+
+
+
+c3 <- 
+  ggplot(cluster_optimo %>% filter(num_cluster == 3))+
+  
+  geom_point( aes(x = Voluntad_del_pueblo, y = Controles_y_balances_al_Ejecutivo, 
+                  color = Valores_democrático_liberales, 
+                  size = Retórica_hacia_políticos), 
+              alpha = .5)+
+  
+  geom_text_repel(data = cluster_optimo %>% filter(Partido == "Israel is our Home" |
+                                                     Partido == "Party of Communists" |
+                                                     Partido == "Shas" |
+                                                     Partido == "Malaysian Islamic Party") ,
+                  aes(x = Voluntad_del_pueblo, y = Controles_y_balances_al_Ejecutivo, 
+                      label = Partido), 
+                  # color = "#d9060c",
+                  nudge_y = -4)+
+  
+  
+  geom_label( fill = "#F0F0F0",
+              x = 1, y = 5, 
+              label="Valores promedio del Cluster 3:
+                                \n•Valores de la democracia liberal: 7.2\n•Retórica usada hacia los políticos: 5.3\n•Voluntad del pueblo: 6.7\n•A favor o en contra de los controles y\nbalances hacia el poder ejecutivo: 7.5",
+              size = 4, color="black")+
+  
+  
+  
+  scale_color_gradient(low = "#0B465F", high = "#50F2B7", limits = c(0, 10), guide = F)+
+  scale_size(guide = F)+
+  # scale_radius(limits = c(0, 10), range = c(0, 10))+
+  scale_y_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))+
+  scale_x_continuous(limits = c(0, 10), breaks = seq(0, 10, 1))+
+  
+  theme_void()+
+  
+  
+  theme(plot.background = element_rect(fill = "#F0F0F0", color = F),
+        plot.title = element_text(face = "bold", size = 18),
+        plot.subtitle = element_text(color = "black", size = 14),
+        plot.caption = element_text(face = "italic", hjust = 1, size = 11),
+        axis.text.x = element_text(angle = 0, size = 12, vjust = 0, hjust = .5),
+        axis.text.y = element_text(size = 12),
+        axis.title.x = element_text(inherit.blank = F),
+        axis.title.y = element_text(inherit.blank = F, angle = 90),
+        axis.ticks = element_blank(),
+        legend.background = element_rect(fill = "grey75", color = F),
+        legend.key = element_rect(fill = "grey75", color = NA),
+        legend.text = element_text(size = 12),
+        legend.position = c(.05, .05),
+        legend.justification = c("left", "bottom"),
+        legend.box.just = "left")+
+  
+  labs(x = "Voluntad del pueblo", y = "A favor o en contra\nde los controles y\nbalances hacia el\npoder ejecutivo",
+       title="Cluster 3: Partidos populistas en contra de los controles hacia el poder ejecutivo ",
+       subtitle = "Tienen una retórica que se opone fuertemente a los principios de la democracia liberal",
+       caption = "Elaborado por @1LuisDavid con datos de Global Party Survey 2020",
+       color = "Valores de la democracia liberal",
+       size = "El tamaño de cada punto refleja la escala\nde la variable Retórica hacia los políticos")
+
+
+
+#Patchwork, juntar las gráficas
+
+c1/c2/c3 + plot_annotation(
+  title = "Análsis de clusters de partidos políticos populistas",
+  subtitle = "Cada círculo representa un partido",
+  theme = theme(plot.title = element_text(size = 18, face = "bold"),
+                plot.subtitle = element_text(color = "black", size = 14))
+  )+
+
+ggsave("G7 Clusters.png", width = 15, height = 12, dpi = 200)
 
 
 
